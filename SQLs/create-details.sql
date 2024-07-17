@@ -1,0 +1,1 @@
+CREATE TABLE details (id INT, date DATE, product INT, quantity INT, subtotal INT, UNIQUE (id, date, product, quantity, subtotal));

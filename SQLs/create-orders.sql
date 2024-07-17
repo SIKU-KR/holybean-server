@@ -1,0 +1,1 @@
+CREATE TABLE orders (id INT, date DATE, amount INT, method VARCHAR(10), customer VARCHAR(10), UNIQUE (id, date, amount, method, customer));
