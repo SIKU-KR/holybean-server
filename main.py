@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Dict
 from contextlib import asynccontextmanager
-from models import Base, Order as ORMOrder, OrderDetail as ORMOrderDetail, SessionLocal, engine
+from models import Order as ORMOrder, OrderDetail as ORMOrderDetail, SessionLocal, init_models
 
 
 class Order(BaseModel):
@@ -24,16 +24,17 @@ class OrderDetail(BaseModel):
 
 
 # 데이터베이스 세션 의존성
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db():
+    async with SessionLocal() as db:
+        try:
+            yield db
+        finally:
+            await db.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_models()
     yield
 
 
@@ -69,10 +70,13 @@ async def post_orders(data: Dict[str, List[Dict]], db: Session = Depends(get_db)
             db_detail = ORMOrderDetail(**detail.dict())
             db.add(db_detail)
 
-        db.commit()
+        await db.commit()
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        await db.rollback()
+        if "1062" in str(e):  # MySQL 오류 코드 1062: Duplicate entry
+            raise HTTPException(status_code=400, detail="Duplicate entry detected")
+        else:
+            raise HTTPException(status_code=500, detail=str(e))
 
     return {"message": "Orders and details successfully inserted"}
 
@@ -81,4 +85,4 @@ async def post_orders(data: Dict[str, List[Dict]], db: Session = Depends(get_db)
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8081, reload=True)
